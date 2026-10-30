@@ -1,38 +1,80 @@
-# ADR-001: Chọn kiến trúc AI Engine
-**Ngày:** 2026-10-30  
-**Trạng thái:** Đã chấp thuận
+# Architecture Decision Records (ADR)
 
-## Quyết định
-Chạy AI Engine như một **Python FastAPI microservice riêng biệt** thay vì nhúng ONNX.js vào Node.js backend.
-
-## Lý do
-- Tận dụng được GPU RTX 3050/3060 của laptop thông qua CUDA + TensorFlow.
-- Scikit-learn và Keras có ecosystem mạnh hơn, dễ train và debug hơn ONNX.js.
-- Tách biệt hoàn toàn → dễ thay đổi model mà không ảnh hưởng backend.
+> Decisions log for the IoT Motor Monitoring System.  
+> Each ADR documents a key architectural choice, the alternatives considered, and the rationale.
 
 ---
 
-# ADR-002: Chọn giao thức IoT Simulator
-**Ngày:** 2026-10-30  
-**Trạng thái:** Đã chấp thuận
+## ADR-001: AI Engine as a Separate Python Microservice (vs. ONNX.js in Node.js)
 
-## Quyết định
-Dùng **WebSocket thuần** (Socket.IO) thay vì MQTT broker (Mosquitto/EMQX).
+**Date:** 2026-10-30  
+**Status:** Accepted
 
-## Lý do
-- Cắt bỏ 1 Docker container (MQTT broker) → nhẹ hơn ~200MB RAM.
-- Demo cho hội đồng không cần giải thích thêm MQTT protocol.
-- Vẫn đảm bảo real-time y chang MQTT.
+### Decision
+Run the AI Engine as a **standalone Python 3.11 + FastAPI microservice**, rather than embedding ONNX.js models directly into the Node.js backend.
+
+### Alternatives Considered
+- **ONNX.js in Node.js:** Embed exported ONNX models into the Fastify backend, removing the need for a separate Python process.
+- **Python sidecar (chosen):** Run Python FastAPI as a dedicated service, called over HTTP from the Node.js backend.
+
+### Rationale
+- The development machine (Acer Nitro AN515-57) has an NVIDIA RTX 3050/3060 GPU. TensorFlow with CUDA support allows the LSTM Autoencoder to train on GPU, providing 5–10× speedup. ONNX.js runs on CPU only, wasting available GPU resources.
+- scikit-learn, Keras, and Pandas have a significantly richer ecosystem for model development, debugging, and evaluation than the ONNX.js runtime.
+- Keeping AI inference decoupled from the API layer means models can be swapped or retrained without touching the Node.js codebase.
 
 ---
 
-# ADR-003: Chọn Database
-**Ngày:** 2026-10-30  
-**Trạng thái:** Đã chấp thuận
+## ADR-002: WebSocket (Socket.IO) over MQTT for IoT Simulation
 
-## Quyết định
-Dùng **SQLite** cho môi trường dev/demo. Cấu hình sẵn để migrate sang PostgreSQL khi cần.
+**Date:** 2026-10-30  
+**Status:** Accepted
 
-## Lý do
-- Không cần Docker container riêng cho DB → tiết kiệm tài nguyên.
-- Prisma hỗ trợ đổi provider chỉ bằng 1 dòng config.
+### Decision
+Use **Socket.IO (WebSocket)** as the IoT communication protocol for the simulator, instead of MQTT with a dedicated broker (Mosquitto or EMQX).
+
+### Alternatives Considered
+- **MQTT + Mosquitto broker:** Industry-standard lightweight IoT protocol. Requires an additional Docker container.
+- **WebSocket via Socket.IO (chosen):** Bidirectional real-time protocol running directly over the existing Node.js backend.
+
+### Rationale
+- Removes one Docker container (~200 MB RAM overhead) from the development stack, keeping resource usage manageable on a laptop.
+- Simplifies the demo setup — no need to explain or configure an MQTT broker during thesis defense.
+- Real-time data delivery quality is equivalent to MQTT for this use case (low device count, LAN environment).
+- If real hardware integration is needed in the future, MQTT can be added as an adapter layer without restructuring the backend.
+
+---
+
+## ADR-003: SQLite for Development, PostgreSQL-ready via Prisma
+
+**Date:** 2026-10-30  
+**Status:** Accepted
+
+### Decision
+Use **SQLite** as the development and demo database, with the Prisma schema pre-configured to migrate to **PostgreSQL** in production via a single config change.
+
+### Alternatives Considered
+- **PostgreSQL from the start:** Full production-grade relational database. Requires a separate Docker container.
+- **SQLite (chosen):** Embedded file-based database, zero infrastructure overhead.
+
+### Rationale
+- Eliminates a PostgreSQL Docker container for local dev and thesis demo, reducing total memory footprint.
+- Prisma's provider abstraction (`provider = "sqlite"` → `provider = "postgresql"`) means switching databases requires changing exactly one line in `schema.prisma` and running `prisma migrate deploy`.
+- SQLite is sufficient for demo-scale workloads: a single motor simulator pushing ~2 readings/second generates well under 1 GB of data per week.
+
+---
+
+## ADR-004: 4-Model AI Architecture (2 IoT + 2 Security)
+
+**Date:** 2026-10-30  
+**Status:** Accepted
+
+### Decision
+Deploy exactly **4 AI models** split into two subsystems: IoT anomaly detection and web security.
+
+### Rationale
+- **Isolation Forest (IoT):** Fast, unsupervised, no labels required. Best at detecting sudden point anomalies (spikes). Acts as the first line of defense in the anomaly pipeline.
+- **LSTM Autoencoder (IoT):** Learns temporal patterns in the sensor stream. Superior at detecting slow drift faults that Isolation Forest misses. Provides the deep learning perspective for academic comparison.
+- **Isolation Forest (Security):** Reuses the same algorithm on HTTP request metadata to detect behavioral anomalies (DDoS patterns, brute-force login attempts). Demonstrates algorithm versatility.
+- **TF-IDF + Logistic Regression (Security):** Lightweight NLP classifier on API request payloads. Sub-2ms inference. Detects SQL Injection and XSS strings without regex rule maintenance.
+
+This split gives the thesis a strong comparative evaluation story: **statistical ML vs. deep learning** (IoT layer) and **behavioral anomaly detection vs. content analysis** (security layer).
