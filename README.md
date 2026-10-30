@@ -11,28 +11,7 @@ In industrial environments (factories, production lines), machinery continuously
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    FRONTEND (React)                         │
-│   Dashboard │ Real-time Charts │ Alerts │ Model Comparison  │
-│   React 18 + TypeScript + TailwindCSS + Recharts            │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ REST API + WebSocket (Socket.IO)
-┌─────────────────────────▼───────────────────────────────────┐
-│                BACKEND (Node.js + Fastify)                   │
-│   Auth (JWT) │ WebSocket Hub │ API Routes │ Job Queue       │
-│   Prisma ORM + SQLite (dev) / PostgreSQL (prod)             │
-└──────┬──────────────────┬───────────────────────────────────┘
-       │                  │
-┌──────▼────────┐  ┌──────▼────────────────────────────────── ┐
-│ IoT Simulator │  │         AI Engine (Python FastAPI)        │
-│   Python      │  │  Isolation Forest │ LSTM Autoencoder      │
-│   Generates   │  │  Traffic Anomaly  │ NLP Payload Inspector │
-│   sensor data │  └───────────────────────────────────────────┘
-└───────────────┘
-         │
-    SQLite / PostgreSQL (time-series storage)
-```
+![System Architecture](docs/images/system_architecture.png)
 
 ## AI / ML Models
 
