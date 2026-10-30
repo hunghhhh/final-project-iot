@@ -48,17 +48,19 @@ async function bootstrap() {
     });
   });
 
-  // Emergency reset endpoint
-  fastify.post("/api/emergency/reset", async () => {
-    io.emit("system:reset", { timestamp: Date.now() });
-    return { success: true, message: "System emergency state reset successfully." };
-  });
-
   // ─── Socket.IO WebSocket Hub ────────────────────────────────────────────────
   const httpServer = createServer(fastify.server);
   const io = new Server(httpServer, {
     cors: { origin: "*" },
     path: "/ws",
+  });
+
+  // Emergency reset endpoint
+  fastify.post("/api/emergency/reset", async () => {
+    console.log("[GATEWAY] Reset command received from HTTP, broadcasting to all...");
+    io.emit("simulator:reset", { timestamp: Date.now() });
+    io.emit("system:reset", { timestamp: Date.now() });
+    return { success: true, message: "System emergency state reset successfully." };
   });
 
   io.on("connection", (socket) => {
@@ -81,7 +83,7 @@ async function bootstrap() {
 
         // Broadcast to React frontend
         io.emit("dashboard:update", packet);
-      } catch (err) {
+      } catch {
         // Ignored in stream throughput
       }
     });
@@ -92,10 +94,11 @@ async function bootstrap() {
       io.emit("simulator:trigger_fault", data);
     });
 
-    // 3. Emergency trip/shut-off from UI
-    socket.on("emergency:trip", () => {
-      console.log("[GATEWAY] Emergency stop tripped by operator!");
-      io.emit("system:emergency_stop", { timestamp: Date.now() });
+    // 3. Reset command from Web UI button
+    socket.on("system:reset_request", () => {
+      console.log("[GATEWAY] Operator pressed Reset on Web Dashboard. Clearing all faults!");
+      io.emit("simulator:reset", { timestamp: Date.now() });
+      io.emit("system:reset", { timestamp: Date.now() });
     });
   });
 

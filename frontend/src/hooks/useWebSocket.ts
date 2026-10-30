@@ -48,9 +48,17 @@ export function useWebSocket() {
     };
   }, []);
 
+  // Send reset command through websocket directly
+  const resetSystem = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('system:reset_request');
+    }
+  };
+
   return {
     isConnected,
     latestPacket,
     streamHistory,
+    resetSystem,
   };
 }

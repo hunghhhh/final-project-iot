@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const { isConnected, latestPacket, streamHistory } = useWebSocket();
+  const { isConnected, latestPacket, streamHistory, resetSystem } = useWebSocket();
   const [isEmergencyActive, setIsEmergencyActive] = useState<boolean>(false);
 
   // Monitor AI anomaly score - if it exceeds critical threshold (>0.85), switch to Emergency Page
@@ -37,12 +37,10 @@ export default function App() {
   }, [latestPacket]);
 
   // Handle operator acknowledge and reset back to normal dashboard
-  const handleResetEmergency = async () => {
-    try {
-      await fetch('http://localhost:3001/api/emergency/reset', { method: 'POST' });
-    } catch {
-      // ignore
-    }
+  const handleResetEmergency = () => {
+    // 1. Send reset signal to backend & simulator
+    resetSystem();
+    // 2. Clear emergency state on UI immediately
     setIsEmergencyActive(false);
   };
 
@@ -256,7 +254,7 @@ export default function App() {
                   type="monotone"
                   dataKey="vibX"
                   name="Vib X (Horizontal)"
-                  stroke="#2563eb" // Blue
+                  stroke="#2563eb"
                   dot={false}
                   strokeWidth={2}
                   isAnimationActive={false}
@@ -265,7 +263,7 @@ export default function App() {
                   type="monotone"
                   dataKey="vibY"
                   name="Vib Y (Vertical)"
-                  stroke="#d97706" // Yellow/Amber
+                  stroke="#d97706"
                   dot={false}
                   strokeWidth={2}
                   isAnimationActive={false}
@@ -274,7 +272,7 @@ export default function App() {
                   type="monotone"
                   dataKey="vibZ"
                   name="Vib Z (Axial)"
-                  stroke="#0284c7" // Sky Blue
+                  stroke="#0284c7"
                   dot={false}
                   strokeWidth={2}
                   isAnimationActive={false}
@@ -333,7 +331,7 @@ export default function App() {
                   type="monotone"
                   dataKey="temperature"
                   name="Temperature (°C)"
-                  stroke="#d97706" // Amber / Warm
+                  stroke="#d97706"
                   dot={false}
                   strokeWidth={2}
                   isAnimationActive={false}
@@ -343,7 +341,7 @@ export default function App() {
                   type="monotone"
                   dataKey="current"
                   name="Current (A)"
-                  stroke="#2563eb" // Blue
+                  stroke="#2563eb"
                   dot={false}
                   strokeWidth={2}
                   isAnimationActive={false}

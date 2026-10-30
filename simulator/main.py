@@ -43,6 +43,13 @@ class MotorSimulator:
         self.active_fault = fault_type
         self.fault_duration = int(duration_sec / SAMPLING_INTERVAL)
 
+    def reset(self):
+        """Immediately clear all active faults and restore healthy baseline."""
+        print("\n[OPERATOR RESET] Restoring motor to healthy operating condition immediately.\n")
+        self.active_fault = None
+        self.fault_duration = 0
+        self.drift_offset = 0.0
+
     def step(self):
         self.t += SAMPLING_INTERVAL
         
@@ -69,51 +76,43 @@ class MotorSimulator:
             }
 
             if self.active_fault == "spike":
-                # Instantaneous vibration shock
                 vib_x += random.uniform(5.5, 9.5)
                 vib_z += random.uniform(4.5, 8.0)
             
             elif self.active_fault == "drift":
-                # Gradual thermal runaway
                 self.drift_offset += 0.5
                 temperature += self.drift_offset
                 vib_x += 0.08 * self.drift_offset
 
             elif self.active_fault == "jam":
-                # Mechanical overload
                 current += random.uniform(16.0, 24.0)
                 rpm -= random.uniform(350.0, 600.0)
                 temperature += 3.5
 
             elif self.active_fault == "flatline":
-                # Sensor wiring disconnect / dead signal
                 vib_x = 0.0
                 vib_y = 0.0
                 vib_z = 0.0
                 current = 0.0
 
             elif self.active_fault == "critical":
-                # CATASTROPHIC MULTI-POINT FAILURE:
-                # Severe rotor eccentricity, thermal runaway, bearing seizure
                 self.drift_offset += 1.2
-                temperature += 28.0 + self.drift_offset   # > 98°C
-                vib_x += random.uniform(9.0, 16.0)        # > 10 mm/s (Dangerous vibration)
+                temperature += 28.0 + self.drift_offset
+                vib_x += random.uniform(9.0, 16.0)
                 vib_y += random.uniform(7.0, 12.0)
                 vib_z += random.uniform(8.0, 14.0)
-                current += random.uniform(22.0, 32.0)     # > 35A (Overcurrent)
-                rpm -= random.uniform(600.0, 950.0)       # RPM collapsing
+                current += random.uniform(22.0, 32.0)
+                rpm -= random.uniform(600.0, 950.0)
 
             if self.fault_duration <= 0:
                 print("[FAULT CLEARED] Motor returning to nominal baseline.\n")
                 self.active_fault = None
                 self.drift_offset = 0.0
 
-        # Calculate an inline AI Anomaly Score (0.0 to 1.0) based on multi-variate deviation
-        # (Emulates isolation forest & reconstruction error before python AI service integration)
         anomaly_score = 0.04
         if fault_metadata:
             if self.active_fault == "critical":
-                anomaly_score = min(0.99, 0.85 + random.uniform(0.05, 0.14))
+                anomaly_score = min(0.99, 0.88 + random.uniform(0.04, 0.11))
             elif self.active_fault == "jam":
                 anomaly_score = min(0.95, 0.75 + random.uniform(0.05, 0.15))
             else:
@@ -150,6 +149,10 @@ def on_trigger_fault(data):
     fault_type = data.get("type", "spike")
     duration = data.get("duration", 12)
     simulator_instance.trigger_fault(fault_type, duration)
+
+@sio.on("simulator:reset")
+def on_reset(data):
+    simulator_instance.reset()
 
 # ─── Main Streaming Loop ──────────────────────────────────────────────────────
 def main():
