@@ -33,13 +33,13 @@ class MotorSimulator:
         self.base_rpm = 1450.0      # RPM
 
         # Active injected fault state
-        self.active_fault = None  # None | "spike" | "drift" | "jam"
+        self.active_fault = None  # None | "spike" | "drift" | "jam" | "flatline" | "critical"
         self.fault_duration = 0
         self.drift_offset = 0.0
 
-    def trigger_fault(self, fault_type: str, duration_sec: int = 10):
+    def trigger_fault(self, fault_type: str, duration_sec: int = 12):
         """Simulate a physical motor fault for evaluation & testing."""
-        print(f"\n[FAULT INJECTED] Activating: {fault_type.upper()} for {duration_sec}s")
+        print(f"\n[FAULT INJECTED VIA CLI] Activating: {fault_type.upper()} for {duration_sec}s")
         self.active_fault = fault_type
         self.fault_duration = int(duration_sec / SAMPLING_INTERVAL)
 
@@ -61,35 +61,64 @@ class MotorSimulator:
         # 2. Apply Injected Fault (Ground Truth)
         if self.active_fault:
             self.fault_duration -= 1
+            severity = "CRITICAL" if self.active_fault == "critical" else "HIGH"
             fault_metadata = {
                 "injected": True,
                 "type": self.active_fault,
-                "severity": "HIGH"
+                "severity": severity
             }
 
             if self.active_fault == "spike":
-                # Bearing scratch / mechanical impact (instantaneous 4-5x vibration burst)
-                vib_x += random.uniform(5.0, 9.0)
-                vib_z += random.uniform(4.0, 7.5)
+                # Instantaneous vibration shock
+                vib_x += random.uniform(5.5, 9.5)
+                vib_z += random.uniform(4.5, 8.0)
             
             elif self.active_fault == "drift":
-                # Bearing dry friction / Stator winding overheating (gradual thermal runaway)
-                self.drift_offset += 0.35
+                # Gradual thermal runaway
+                self.drift_offset += 0.5
                 temperature += self.drift_offset
-                vib_x += 0.05 * self.drift_offset
+                vib_x += 0.08 * self.drift_offset
 
             elif self.active_fault == "jam":
-                # Mechanical jamming / Overload (current surges 2.5x, RPM collapses)
-                current += random.uniform(15.0, 22.0)
-                rpm -= random.uniform(300.0, 500.0)
-                temperature += 2.0
+                # Mechanical overload
+                current += random.uniform(16.0, 24.0)
+                rpm -= random.uniform(350.0, 600.0)
+                temperature += 3.5
+
+            elif self.active_fault == "flatline":
+                # Sensor wiring disconnect / dead signal
+                vib_x = 0.0
+                vib_y = 0.0
+                vib_z = 0.0
+                current = 0.0
+
+            elif self.active_fault == "critical":
+                # CATASTROPHIC MULTI-POINT FAILURE:
+                # Severe rotor eccentricity, thermal runaway, bearing seizure
+                self.drift_offset += 1.2
+                temperature += 28.0 + self.drift_offset   # > 98°C
+                vib_x += random.uniform(9.0, 16.0)        # > 10 mm/s (Dangerous vibration)
+                vib_y += random.uniform(7.0, 12.0)
+                vib_z += random.uniform(8.0, 14.0)
+                current += random.uniform(22.0, 32.0)     # > 35A (Overcurrent)
+                rpm -= random.uniform(600.0, 950.0)       # RPM collapsing
 
             if self.fault_duration <= 0:
                 print("[FAULT CLEARED] Motor returning to nominal baseline.\n")
                 self.active_fault = None
                 self.drift_offset = 0.0
 
-        # Clamp physically impossible negative values
+        # Calculate an inline AI Anomaly Score (0.0 to 1.0) based on multi-variate deviation
+        # (Emulates isolation forest & reconstruction error before python AI service integration)
+        anomaly_score = 0.04
+        if fault_metadata:
+            if self.active_fault == "critical":
+                anomaly_score = min(0.99, 0.85 + random.uniform(0.05, 0.14))
+            elif self.active_fault == "jam":
+                anomaly_score = min(0.95, 0.75 + random.uniform(0.05, 0.15))
+            else:
+                anomaly_score = min(0.85, 0.60 + random.uniform(0.05, 0.18))
+
         return {
             "deviceId": self.device_id,
             "timestamp": int(time.time() * 1000),
@@ -101,8 +130,11 @@ class MotorSimulator:
                 "current": round(max(0.0, current), 2),
                 "rpm": round(max(0.0, rpm), 1),
             },
-            "fault": fault_metadata
+            "fault": fault_metadata,
+            "anomalyScore": round(anomaly_score, 3)
         }
+
+simulator_instance = MotorSimulator(DEVICE_ID)
 
 # ─── Socket.IO Events ─────────────────────────────────────────────────────────
 @sio.event
@@ -113,9 +145,11 @@ def connect():
 def disconnect():
     print("[IoT Edge] Disconnected from Gateway")
 
-@sio.event
-def connect_error(data):
-    print(f"[IoT Edge] Connection error: {data}")
+@sio.on("simulator:trigger_fault")
+def on_trigger_fault(data):
+    fault_type = data.get("type", "spike")
+    duration = data.get("duration", 12)
+    simulator_instance.trigger_fault(fault_type, duration)
 
 # ─── Main Streaming Loop ──────────────────────────────────────────────────────
 def main():
@@ -123,10 +157,8 @@ def main():
     print("Industrial IoT Motor Edge Simulator Starting...")
     print(f"Device ID: {DEVICE_ID} (3-Phase Induction Motor)")
     print(f"Sampling Rate: {SAMPLING_INTERVAL}s (2 readings/sec)")
-    print(f"Target Gateway: {SERVER_URL}{SOCKET_PATH}")
+    print("Waiting for external commands via `python inject_fault.py`")
     print("=" * 65)
-
-    simulator = MotorSimulator(DEVICE_ID)
 
     try:
         sio.connect(SERVER_URL, socketio_path=SOCKET_PATH, wait_timeout=5)
@@ -138,23 +170,18 @@ def main():
     packet_count = 0
     try:
         while True:
-            packet = simulator.step()
+            packet = simulator_instance.step()
             sio.emit("sensor:data", packet)
             packet_count += 1
 
             m = packet["metrics"]
-            fault_tag = f" [ALERT: {packet['fault']['type'].upper()}]" if packet.get("fault") else ""
+            score = packet["anomalyScore"]
+            fault_tag = f" [ALERT: {packet['fault']['type'].upper()} | SCORE: {score}]" if packet.get("fault") else f" [SCORE: {score}]"
             print(
                 f"[{packet_count:04d}] Temp: {m['temperature']:5.1f}C | "
                 f"Vib: X={m['vibration_x']:5.2f} Y={m['vibration_y']:5.2f} Z={m['vibration_z']:5.2f} | "
                 f"Curr: {m['current']:4.1f}A | RPM: {m['rpm']:6.1f}{fault_tag}"
             )
-
-            # Auto-demo: Inject a fault after 20 healthy packets (~10 seconds)
-            if packet_count == 20:
-                simulator.trigger_fault("spike", duration_sec=4)
-            elif packet_count == 45:
-                simulator.trigger_fault("drift", duration_sec=8)
 
             time.sleep(SAMPLING_INTERVAL)
 

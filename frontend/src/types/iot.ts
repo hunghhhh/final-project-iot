@@ -9,7 +9,7 @@ export interface SensorMetrics {
 
 export interface InjectedFault {
   injected: boolean;
-  type: 'spike' | 'drift' | 'jam' | 'flatline';
+  type: 'spike' | 'drift' | 'jam' | 'flatline' | 'critical';
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 }
 
@@ -18,14 +18,5 @@ export interface SensorPacket {
   timestamp: number;
   metrics: SensorMetrics;
   fault?: InjectedFault | null;
-}
-
-export interface DeviceInfo {
-  id: string;
-  name: string;
-  type: string;
-  location: string;
-  status: string;
-  ratedPower: number;
-  ratedRpm: number;
+  anomalyScore?: number;
 }

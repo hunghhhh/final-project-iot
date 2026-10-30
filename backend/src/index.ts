@@ -18,23 +18,22 @@ interface SensorPacket {
   };
   fault?: {
     injected: boolean;
-    type: "spike" | "drift" | "flatline" | "contextual";
+    type: "spike" | "drift" | "jam" | "flatline" | "critical";
     severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   };
+  anomalyScore?: number;
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 export const prisma = new PrismaClient();
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({ logger: false });
 
 async function bootstrap() {
-  // ─── CORS ──────────────────────────────────────────────────────────────────
   await fastify.register(fastifyCors, {
     origin: ["http://localhost:5173", "http://localhost:3000"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   });
 
-  // ─── Routes ────────────────────────────────────────────────────────────────
   // Health check
   fastify.get("/health", async () => ({
     status: "ok",
@@ -46,27 +45,13 @@ async function bootstrap() {
   fastify.get("/api/devices", async () => {
     return prisma.device.findMany({
       orderBy: { createdAt: "desc" },
-      include: {
-        _count: { select: { readings: true, alerts: true } },
-      },
     });
   });
 
-  fastify.get("/api/devices/:id/readings", async (req) => {
-    const { id } = req.params as { id: string };
-    return prisma.sensorReading.findMany({
-      where: { deviceId: id },
-      orderBy: { timestamp: "desc" },
-      take: 200, // Last 200 readings for chart
-    });
-  });
-
-  fastify.get("/api/alerts", async () => {
-    return prisma.alert.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      include: { device: { select: { name: true, location: true } } },
-    });
+  // Emergency reset endpoint
+  fastify.post("/api/emergency/reset", async () => {
+    io.emit("system:reset", { timestamp: Date.now() });
+    return { success: true, message: "System emergency state reset successfully." };
   });
 
   // ─── Socket.IO WebSocket Hub ────────────────────────────────────────────────
@@ -77,14 +62,9 @@ async function bootstrap() {
   });
 
   io.on("connection", (socket) => {
-    fastify.log.info(`[WS] Client connected: ${socket.id}`);
-
-    // IoT Simulator connects here and sends sensor data
+    // 1. Telemetry stream from IoT Simulator
     socket.on("sensor:data", async (packet: SensorPacket) => {
-      fastify.log.info(`[IoT] Received from ${packet.deviceId}`);
-
       try {
-        // 1. Save to database
         await prisma.sensorReading.create({
           data: {
             deviceId: packet.deviceId,
@@ -99,17 +79,23 @@ async function bootstrap() {
           },
         });
 
-        // 2. Broadcast to all dashboard clients in real-time
+        // Broadcast to React frontend
         io.emit("dashboard:update", packet);
-
-        // 3. Forward to AI Engine for anomaly detection (Will plug in later)
-      } catch (error) {
-        fastify.log.error(error, "Failed to persist sensor reading");
+      } catch (err) {
+        // Ignored in stream throughput
       }
     });
 
-    socket.on("disconnect", () => {
-      fastify.log.info(`[WS] Client disconnected: ${socket.id}`);
+    // 2. Fault injection command from CLI tool (inject_fault.py)
+    socket.on("simulator:fault_command", (data: { type: string; duration: number }) => {
+      console.log(`[GATEWAY] Dispatching fault command to simulator: ${data.type}`);
+      io.emit("simulator:trigger_fault", data);
+    });
+
+    // 3. Emergency trip/shut-off from UI
+    socket.on("emergency:trip", () => {
+      console.log("[GATEWAY] Emergency stop tripped by operator!");
+      io.emit("system:emergency_stop", { timestamp: Date.now() });
     });
   });
 
