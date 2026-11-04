@@ -41,6 +41,14 @@ In industrial environments (factories, production lines), machinery continuously
 | Simulator | Python 3.11 (generates synthetic motor sensor data with injectable faults) |
 | DevOps | Docker Compose |
 
+## Engineering Standards & Methodologies
+
+This project follows enterprise-grade engineering principles adopted from leading open-source toolkits:
+* **[Spec-Driven Development (SDD) via `github/spec-kit`](https://github.com/github/spec-kit):** Project intent, architectural constraints, and safety requirements are formalized before implementation:
+  * **[Project Constitution](.specify/constitution.md):** Fundamental constraints on industrial safety, physical accuracy, and data contracts.
+  * **[SPEC-001: Core Telemetry & Emergency Interlock](.specify/specs/001-core-telemetry-and-interlock.md):** Specification for Edge streaming, CLI fault injection, and safety interlocks.
+* **[Agentic Workflows via `mattpocock/skills`](https://github.com/mattpocock/skills):** Domain modeling, Architectural Decision Records (ADRs), and strict TypeScript standards.
+
 ## Project Structure
 
 ```
