@@ -1,0 +1,79 @@
+================================================================================
+PROJECT SUMMARY & EXECUTION GUIDE (HUONG DAN CHAY VA GIAI THICH DU AN)
+Thesis: Smart Predictive Maintenance System for Industrial Motors Using Machine Learning and Real-Time Telemetry
+Location: D:\IOT\iot-motor-monitoring
+================================================================================
+
+--------------------------------------------------------------------------------
+1. CAC CAU LENH KHOI DONG TOAN BO HE THONG (RUN COMMANDS)
+--------------------------------------------------------------------------------
+De chay he thong day du de demo, mo 3 cua so Terminal (PowerShell) rieng biet:
+
+[CUA SO 1 - BACKEND (IoT Gateway & Database)]:
+  cd D:\IOT\iot-motor-monitoring\backend
+  npm run dev
+  -> Cong chay: http://localhost:3001
+  -> WebSocket Hub: ws://localhost:3001/ws
+  -> CSDL: SQLite (prisma/dev.db)
+
+[CUA SO 2 - FRONTEND (SCADA Web Dashboard)]:
+  cd D:\IOT\iot-motor-monitoring\frontend
+  npm run dev
+  -> Truy cap trinh duyet tai: http://localhost:5173
+
+[CUA SO 3 - IOT SIMULATOR (Thiet bi do cam bien ao)]:
+  cd D:\IOT\iot-motor-monitoring\simulator
+  python main.py
+  -> Bat dau lay mau 4 kenh cam bien va ban 2 goi tin/giay vao Backend.
+
+--------------------------------------------------------------------------------
+2. CAU LENH TAO SU CO / BOM LOI DE DEMO (CLI ANOMALY INJECTION)
+--------------------------------------------------------------------------------
+Mo them Cua so Terminal thu 4 de go cac lenh kich hoat su co:
+
+- Kich hoat va dap nut o bi (Rung X/Z tang vot tuc thi):
+    cd D:\IOT\iot-motor-monitoring\simulator
+    python inject_fault.py --type spike
+
+- Kich hoat om day qua nhiet (Nhiet do tang doc dan dan):
+    python inject_fault.py --type drift
+
+- Kich hoat ket tai co hoc (Dong dien vot len >30A, RPM tut doc):
+    python inject_fault.py --type jam
+
+- KICH HOAT SU CO THAM HOA (Web tu dong nhay sang Emergency Interlock Page mau do):
+    python inject_fault.py --type critical
+
+- Chinh thoi gian dien ra loi (vi du 15 giay):
+    python inject_fault.py --type critical --duration 15
+
+--------------------------------------------------------------------------------
+3. NHUNG GI DU AN DA LAM DUOC (SUMMARY OF WORK COMPLETED)
+--------------------------------------------------------------------------------
+1. KHE UOC DU LIEU (IoT Data Contract):
+   - Thong nhat chuan JSON truyen thong gom 6 dai luong vat ly:
+     Nhiet do Stator (deg C), Do rung 3 truc X, Y, Z (mm/s), Dong dien pha (A),
+     Toc do truc quay (RPM) kem theo nhan Ground Truth danh cho AI danh gia.
+
+2. IoT GATEWAY & LUU TRU CHUOI THOI GIAN (Backend):
+   - Xay dung bang Node.js + Fastify + Prisma ORM + SQLite.
+   - Thiet lap kenh WebSocket Hub hai chieu (Full-duplex Socket.IO).
+   - Tiep nhan goi tin 500ms, ghi lich su vao bang `sensor_readings`.
+
+3. GIAO DIEN SCADA CONG NGHIEP (Frontend Web Dashboard):
+   - Xay dung bang React 18 + TypeScript + TailwindCSS v4 + Recharts.
+   - Tone mau chuan phong dieu hanh: Nen trang sach, diem nhan Xanh duong & Vang ho phach.
+   - 4 the do luong KPI truc quan (Nhiet do, Rung X theo tieu chuan ISO 10816, Dong dien, RPM).
+   - 2 bieu do song thoi gian thuc: Do rung 3 truc va Tuong quan Nhiet do - Dong dien.
+
+4. CO CHE KHOA AN TOAN 2 CHIEU (Automated Emergency Interlock):
+   - Khi diem bat thuong cua AI >= 85%, Web tu dong chuyen huong toan man hinh
+     sang trang Emergency Interlock Page mau do (giai thich chan doan nguyen nhan goc).
+   - Nut bam "Acknowledge & Reset System" tren web ban tin hieu nguoc lai qua WebSocket
+     yeu cuu Simulator huy bo toan bo loi, tra dong co ve trang thai hoat dong binh thuong.
+
+5. CHUAN HOA KY THUAT (Engineering Standards):
+   - Tich hop tieu chuan Spec-Driven Development (SDD) tu `github/spec-kit`
+     (.specify/constitution.md va SPEC-001).
+   - Tich hop quy chuan kien truc he thong tu `mattpocock/skills` (ADRs & Domain modeling).
+================================================================================
