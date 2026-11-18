@@ -24,13 +24,13 @@ class MotorSimulator:
         self.device_id = device_id
         self.t = 0.0  # Time step index
         
-        # Nominal / Baseline operational parameters (Healthy Motor)
+        # Nominal / Baseline operational parameters (Healthy Motor - CWRU Reliance 2HP Benchmark)
         self.base_temp = 68.0       # deg C
-        self.base_vib_x = 1.2       # mm/s
-        self.base_vib_y = 0.8       # mm/s
-        self.base_vib_z = 1.5       # mm/s
+        self.base_vib_x = 0.74      # mm/s
+        self.base_vib_y = 0.80      # mm/s
+        self.base_vib_z = 1.50      # mm/s
         self.base_current = 12.4    # Amperes
-        self.base_rpm = 1450.0      # RPM
+        self.base_rpm = 1797.0      # RPM (CWRU standard 4-pole synchronous baseline)
 
         # Active injected fault state
         self.active_fault = None  # None | "spike" | "drift" | "jam" | "flatline" | "critical"

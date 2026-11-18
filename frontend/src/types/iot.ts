@@ -13,10 +13,43 @@ export interface InjectedFault {
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 }
 
+export interface AIDiagnostics {
+  isAnomaly: boolean;
+  severity: 'NORMAL' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  faultType?: string | null;
+  rootCause: string;
+  latencyMs: number;
+  details?: Record<string, number>;
+}
+
 export interface SensorPacket {
   deviceId: string;
   timestamp: number;
   metrics: SensorMetrics;
   fault?: InjectedFault | null;
   anomalyScore?: number;
+  aiDiagnostics?: AIDiagnostics;
+}
+
+export interface MotorDevice {
+  id: string;
+  name: string;
+  type: string;
+  location: string;
+  ratedPower?: number;
+  ratedRpm?: number;
+  status: 'ACTIVE' | 'MAINTENANCE' | 'OFFLINE' | 'FAULT';
+}
+
+export interface AlertRecord {
+  id: string;
+  deviceId: string;
+  modelName: string;
+  anomalyScore: number;
+  severity: string;
+  faultType?: string | null;
+  message: string;
+  acknowledged: boolean;
+  resolvedAt?: string | null;
+  createdAt: string;
 }

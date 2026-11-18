@@ -5,29 +5,103 @@ import { createServer } from "http";
 import { PrismaClient } from "@prisma/client";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────
+interface SensorMetrics {
+  temperature: number;
+  vibration_x: number;
+  vibration_y: number;
+  vibration_z: number;
+  current: number;
+  rpm: number;
+}
+
+interface InjectedFault {
+  injected: boolean;
+  type: "spike" | "drift" | "jam" | "flatline" | "critical";
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+}
+
+interface AIDiagnostics {
+  isAnomaly: boolean;
+  severity: "NORMAL" | "MEDIUM" | "HIGH" | "CRITICAL";
+  faultType?: string | null;
+  rootCause: string;
+  latencyMs: number;
+  details?: Record<string, number>;
+}
+
 interface SensorPacket {
   deviceId: string;
   timestamp: number;
-  metrics: {
-    temperature: number;
-    vibration_x: number;
-    vibration_y: number;
-    vibration_z: number;
-    current: number;
-    rpm: number;
-  };
-  fault?: {
-    injected: boolean;
-    type: "spike" | "drift" | "jam" | "flatline" | "critical";
-    severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  };
+  metrics: SensorMetrics;
+  fault?: InjectedFault;
   anomalyScore?: number;
+  aiDiagnostics?: AIDiagnostics;
 }
 
-// ─── Init ──────────────────────────────────────────────────────────────────
+interface AIPredictResponse {
+  deviceId: string;
+  anomalyScore: number;
+  isAnomaly: boolean;
+  severity: "NORMAL" | "MEDIUM" | "HIGH" | "CRITICAL";
+  faultType?: string | null;
+  rootCause: string;
+  latencyMs: number;
+  details?: Record<string, number>;
+}
+
+// ─── Init & AI Client ──────────────────────────────────────────────────────
 export const prisma = new PrismaClient();
 const fastify = Fastify({ logger: false });
 
+const AI_ENGINE_URL = process.env.AI_ENGINE_URL || "http://127.0.0.1:8000";
+const lastAlertTime: Record<string, number> = {};
+
+/**
+ * Real-time HTTP Query to Python AI Inference Microservice (FastAPI Port 8000)
+ * Evaluates both Isolation Forest (Point Shocks) & LSTM Autoencoder (Sequential Drift)
+ */
+async function queryAIEngine(packet: SensorPacket): Promise<AIPredictResponse | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 250); // 250ms timeout
+
+    const res = await fetch(`${AI_ENGINE_URL}/api/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId: packet.deviceId,
+        timestamp: packet.timestamp,
+        metrics: packet.metrics,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      return (await res.json()) as AIPredictResponse;
+    }
+  } catch {
+    // If AI engine is offline or timeout, graceful fallback
+  }
+  return null;
+}
+
+/**
+ * Reset AI Engine sliding window buffers on operator reset
+ */
+async function resetAIEngine(deviceId?: string) {
+  try {
+    await fetch(`${AI_ENGINE_URL}/api/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_id: deviceId }),
+    });
+  } catch {
+    // Graceful ignore
+  }
+}
+
+// ─── Bootstrap Fastify & WebSocket Hub ─────────────────────────────────────
 async function bootstrap() {
   await fastify.register(fastifyCors, {
     origin: ["http://localhost:5173", "http://localhost:3000"],
@@ -38,6 +112,7 @@ async function bootstrap() {
   fastify.get("/health", async () => ({
     status: "ok",
     service: "iot-motor-backend",
+    aiEngineUrl: AI_ENGINE_URL,
     timestamp: new Date().toISOString(),
   }));
 
@@ -45,6 +120,14 @@ async function bootstrap() {
   fastify.get("/api/devices", async () => {
     return prisma.device.findMany({
       orderBy: { createdAt: "desc" },
+    });
+  });
+
+  // Alert history route
+  fastify.get("/api/alerts", async () => {
+    return prisma.alert.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
     });
   });
 
@@ -58,6 +141,7 @@ async function bootstrap() {
   // Emergency reset endpoint
   fastify.post("/api/emergency/reset", async () => {
     console.log("[GATEWAY] Reset command received from HTTP, broadcasting to all...");
+    await resetAIEngine();
     io.emit("simulator:reset", { timestamp: Date.now() });
     io.emit("system:reset", { timestamp: Date.now() });
     return { success: true, message: "System emergency state reset successfully." };
@@ -67,6 +151,43 @@ async function bootstrap() {
     // 1. Telemetry stream from IoT Simulator
     socket.on("sensor:data", async (packet: SensorPacket) => {
       try {
+        // Query Real-Time AI Engine for actual Anomaly Score & Diagnostic Root Cause
+        const aiResult = await queryAIEngine(packet);
+        if (aiResult) {
+          packet.anomalyScore = aiResult.anomalyScore;
+          packet.aiDiagnostics = {
+            isAnomaly: aiResult.isAnomaly,
+            severity: aiResult.severity,
+            faultType: aiResult.faultType,
+            rootCause: aiResult.rootCause,
+            latencyMs: aiResult.latencyMs,
+            details: aiResult.details,
+          };
+
+          // If AI detects critical/high anomaly, persist Alert to database (rate-limited to 1 per 3s)
+          if (aiResult.isAnomaly && aiResult.anomalyScore >= 0.80) {
+            const now = Date.now();
+            const lastTime = lastAlertTime[packet.deviceId] || 0;
+            if (now - lastTime > 3000) {
+              lastAlertTime[packet.deviceId] = now;
+              prisma.alert.create({
+                data: {
+                  deviceId: packet.deviceId,
+                  modelName: "IsolationForest+LSTMAutoencoder",
+                  anomalyScore: aiResult.anomalyScore,
+                  severity: aiResult.severity,
+                  faultType: aiResult.faultType,
+                  message: aiResult.rootCause,
+                },
+              }).catch(() => {});
+              console.log(
+                `[AI-INTERLOCK] 🚨 CRITICAL FAULT DETECTED: Score=${(aiResult.anomalyScore * 100).toFixed(1)}% | ${aiResult.rootCause}`
+              );
+            }
+          }
+        }
+
+        // Persist time-series reading to database
         await prisma.sensorReading.create({
           data: {
             deviceId: packet.deviceId,
@@ -81,7 +202,7 @@ async function bootstrap() {
           },
         });
 
-        // Broadcast to React frontend
+        // Broadcast enriched packet (with real AI score) to React frontend
         io.emit("dashboard:update", packet);
       } catch {
         // Ignored in stream throughput
@@ -95,8 +216,9 @@ async function bootstrap() {
     });
 
     // 3. Reset command from Web UI button
-    socket.on("system:reset_request", () => {
+    socket.on("system:reset_request", async () => {
       console.log("[GATEWAY] Operator pressed Reset on Web Dashboard. Clearing all faults!");
+      await resetAIEngine();
       io.emit("simulator:reset", { timestamp: Date.now() });
       io.emit("system:reset", { timestamp: Date.now() });
     });
@@ -109,6 +231,7 @@ async function bootstrap() {
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`\n🚀 IoT Backend running on http://localhost:${PORT}`);
     console.log(`📡 WebSocket hub ready on ws://localhost:${PORT}/ws`);
+    console.log(`🤖 AI Engine Connected: ${AI_ENGINE_URL}`);
     console.log(`🗄️  Database: SQLite (prisma/dev.db)\n`);
   });
 }

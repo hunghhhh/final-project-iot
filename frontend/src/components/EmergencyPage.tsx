@@ -52,12 +52,20 @@ export const EmergencyPage: React.FC<EmergencyPageProps> = ({ packet, onReset })
 
         {/* ─── AI Diagnostic Explanation Box ─────────────────────────── */}
         <div className="mt-8 bg-white border-2 border-rose-400 rounded-2xl p-6 shadow-xl shadow-rose-200/50">
-          <div className="flex items-center gap-2 text-rose-700 font-bold text-sm uppercase tracking-wider mb-2">
-            <ShieldAlert className="h-5 w-5" />
-            AI Root Cause Diagnostic &amp; Safety Reasoning
+          <div className="flex items-center justify-between gap-2 text-rose-700 font-bold text-sm uppercase tracking-wider mb-2">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5" />
+              AI Root Cause Diagnostic &amp; Safety Reasoning
+            </div>
+            {packet?.aiDiagnostics?.latencyMs && (
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-semibold lowercase">
+                inference: {packet.aiDiagnostics.latencyMs}ms
+              </span>
+            )}
           </div>
-          <p className="text-slate-700 text-sm leading-relaxed">
-            The multi-variate anomaly detection model (LSTM Autoencoder + Isolation Forest) observed severe, non-linear deviations across multiple physical dimensions simultaneously. Reconstruction error surpassed the ISO 10816 Class II mechanical safety envelope. Motor telemetry indicates imminent rotor seizure, extreme thermal breakdown, and high mechanical risk.
+          <p className="text-slate-800 text-sm leading-relaxed font-semibold bg-rose-50/60 p-3 rounded-xl border border-rose-200">
+            {packet?.aiDiagnostics?.rootCause ??
+              "The multi-variate anomaly detection model (LSTM Autoencoder + Isolation Forest) observed severe, non-linear deviations across multiple physical dimensions simultaneously. Reconstruction error surpassed the ISO 10816 Class II mechanical safety envelope."}
           </p>
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">

@@ -59,11 +59,21 @@ def main():
     lstm_model.eval()
     lstm_threshold = lstm_checkpoint["threshold"]
 
-    # 2. Synthesize High-Fidelity Test Set (3,000 samples: 2,000 Normal + 1,000 Multi-Fault)
-    print("[2/5] Synthesizing physical test dataset for evaluation...")
-    from train import generate_dataset
-    df_test = generate_dataset(num_normal=2000, num_anomalous=1000, random_seed=999)
+    # 2. Load Real CWRU Test Dataset (Evaluation on CWRU Bearing Data)
+    print("[2/5] Loading physical test dataset from official CWRU Bearing Data...")
+    cwru_data_path = os.path.join(base_dir, "ai-engine/data/cwru_full_dataset.csv")
+    df = pd.read_csv(cwru_data_path)
     features = ["temperature", "vibration_x", "vibration_y", "vibration_z", "current", "rpm"]
+    
+    # Split: Keep test partition (unseen during 80% normal training)
+    df_normal = df[df["is_anomaly"] == 0]
+    train_size = int(len(df_normal) * 0.8)
+    df_val_normal = df_normal.iloc[train_size:]
+    df_faulty = df[df["is_anomaly"] == 1]
+    
+    # Test set combines unseen normal bearing data + all real fault data
+    df_test = pd.concat([df_val_normal, df_faulty]).sample(frac=1.0, random_state=42).reset_index(drop=True)
+    print(f"  -> Evaluation Set: {len(df_test)} samples ({len(df_val_normal)} unseen Normal + {len(df_faulty)} Faulty)")
     
     X_test_scaled = scaler.transform(df_test[features])
     y_test = df_test["is_anomaly"].values
@@ -177,7 +187,7 @@ def main():
 
 **Thesis:** Smart Predictive Maintenance System for Industrial Motors Using Machine Learning and Real-Time Telemetry  
 **Generated On:** {time.strftime('%Y-%m-%d %H:%M:%S')}  
-**Evaluation Dataset:** 3,000 multi-variate time-series sensor samples (2,000 Normal + 1,000 Multi-Fault)
+**Evaluation Dataset:** {len(df_test):,} physical CWRU Bearing samples ({len(df_val_normal)} unseen Normal + {len(df_faulty)} Faulty)
 
 ---
 

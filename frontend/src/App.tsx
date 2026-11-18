@@ -108,15 +108,56 @@ export default function App() {
             Port: 3001
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-50 border border-amber-200 text-amber-800">
-            <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
-            AI Score: {(score * 100).toFixed(0)}%
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${
+              score >= 0.85
+                ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
+                : score >= 0.40
+                ? 'bg-amber-50 text-amber-800 border-amber-300'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }`}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            CWRU AI Risk: {(score * 100).toFixed(0)}%
+            {latestPacket?.aiDiagnostics?.latencyMs && (
+              <span className="text-[10px] opacity-75 font-normal">
+                ({latestPacket.aiDiagnostics.latencyMs}ms)
+              </span>
+            )}
           </div>
         </div>
       </header>
 
+      {/* ─── Real-Time AI Diagnosis Notification Banner ─────────────────── */}
+      {latestPacket?.aiDiagnostics?.isAnomaly && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-500 text-white rounded-lg">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-amber-950 text-sm">
+                  AI EARLY WARNING: {latestPacket.aiDiagnostics.faultType ? latestPacket.aiDiagnostics.faultType.toUpperCase() : 'ANOMALY DETECTED'}
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900 uppercase">
+                  {latestPacket.aiDiagnostics.severity}
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5">
+                {latestPacket.aiDiagnostics.rootCause}
+              </p>
+            </div>
+          </div>
+          <div className="text-right hidden sm:block">
+            <div className="text-xs font-bold text-amber-900">Isolation Forest + LSTM</div>
+            <div className="text-[11px] text-amber-700">Trained on CWRU Benchmark</div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Active Anomaly Notice (Yellow / Warning style) ─────────────── */}
-      {fault?.injected && (
+      {fault?.injected && !latestPacket?.aiDiagnostics?.isAnomaly && (
         <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-amber-500 text-white rounded-lg">
