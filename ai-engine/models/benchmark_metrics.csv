@@ -1,0 +1,3 @@
+Model,Type,Precision,Recall,F1-Score,Best For
+Isolation Forest,Tree-based Outlier Isolation (Unsupervised),99.89%,75.17%,85.78%,Instantaneous Spikes (Bearing Fissures)
+LSTM Autoencoder,Recurrent Deep Reconstruction (Semi-Supervised),49.90%,100.00%,66.57%,Temporal Drift (Overheating / Bearing Wear)
