@@ -53,22 +53,21 @@ class MotorSimulator:
     def step(self):
         self.t += SAMPLING_INTERVAL
         
-        # 1. Base periodic physics (rotation frequencies + Gaussian sensor noise)
-        freq = 2.0 * math.pi * (self.base_rpm / 60.0)  # Rotational angular freq (~151.8 rad/s)
-        
-        temperature = self.base_temp + 0.5 * math.sin(self.t * 0.02) + random.gauss(0, 0.15)
-        vib_x = self.base_vib_x + 0.3 * math.sin(freq * self.t) + random.gauss(0, 0.08)
-        vib_y = self.base_vib_y + 0.2 * math.cos(freq * self.t) + random.gauss(0, 0.05)
-        vib_z = self.base_vib_z + 0.4 * math.sin(freq * self.t * 0.5) + random.gauss(0, 0.1)
-        current = self.base_current + 0.2 * math.sin(self.t * 0.1) + random.gauss(0, 0.08)
-        rpm = self.base_rpm + random.gauss(0, 2.5)
+        # 1. Base realistic telemetry physics (RMS Vibration Velocity, ISO 10816 baseline)
+        # Note: 500ms telemetry represents computed RMS velocity, not instantaneous sin wave
+        temperature = self.base_temp + 0.1 * math.sin(self.t * 0.01) + random.gauss(0, 0.05)
+        vib_x = self.base_vib_x + random.gauss(0, 0.02)
+        vib_y = self.base_vib_y + random.gauss(0, 0.02)
+        vib_z = self.base_vib_z + random.gauss(0, 0.03)
+        current = self.base_current + random.gauss(0, 0.04)
+        rpm = self.base_rpm + random.gauss(0, 1.2)
 
         fault_metadata = None
 
         # 2. Apply Injected Fault (Ground Truth)
         if self.active_fault:
             self.fault_duration -= 1
-            severity = "CRITICAL" if self.active_fault == "critical" else "HIGH"
+            severity = "CRITICAL" if self.active_fault in ["critical", "spike"] else "HIGH"
             fault_metadata = {
                 "injected": True,
                 "type": self.active_fault,
@@ -76,13 +75,13 @@ class MotorSimulator:
             }
 
             if self.active_fault == "spike":
-                vib_x += random.uniform(5.5, 9.5)
-                vib_z += random.uniform(4.5, 8.0)
+                vib_x += random.uniform(6.5, 11.5)
+                vib_z += random.uniform(5.5, 9.5)
             
             elif self.active_fault == "drift":
-                self.drift_offset += 0.5
+                self.drift_offset += 0.6
                 temperature += self.drift_offset
-                vib_x += 0.08 * self.drift_offset
+                vib_x += 0.10 * self.drift_offset
 
             elif self.active_fault == "jam":
                 current += random.uniform(16.0, 24.0)
@@ -111,12 +110,12 @@ class MotorSimulator:
 
         anomaly_score = 0.04
         if fault_metadata:
-            if self.active_fault == "critical":
-                anomaly_score = min(0.99, 0.88 + random.uniform(0.04, 0.11))
+            if self.active_fault in ["critical", "spike"]:
+                anomaly_score = min(0.99, 0.92 + random.uniform(0.02, 0.07))
             elif self.active_fault == "jam":
-                anomaly_score = min(0.95, 0.75 + random.uniform(0.05, 0.15))
+                anomaly_score = min(0.95, 0.78 + random.uniform(0.05, 0.15))
             else:
-                anomaly_score = min(0.85, 0.60 + random.uniform(0.05, 0.18))
+                anomaly_score = min(0.88, 0.68 + random.uniform(0.05, 0.18))
 
         return {
             "deviceId": self.device_id,

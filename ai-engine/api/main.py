@@ -202,7 +202,8 @@ def predict_anomaly(req: PredictRequest):
     if iso_raw >= -0.60:
         iso_score = 0.02 + 0.23 * max(0.0, (-0.3737 - iso_raw) / (-0.3737 - (-0.60)))
     else:
-        iso_score = 0.70 + 0.30 * min(1.0, max(0.0, (-0.60 - iso_raw) / (-0.60 - (-0.7541))))
+        # Outside normal CWRU boundary: physical vibration shock / impact crack
+        iso_score = 0.86 + 0.13 * min(1.0, max(0.0, (-0.60 - iso_raw) / (-0.60 - (-0.7541))))
     iso_score = float(np.clip(iso_score, 0.0, 1.0))
 
     # 2. LSTM Autoencoder Inference
@@ -212,20 +213,25 @@ def predict_anomaly(req: PredictRequest):
         mse_loss = float(torch.mean((t_seq - recon) ** 2).item())
 
     # Map MSE loss to [0.0, 1.0] score
-    # Healthy operational reconstruction MSE is <= 5.0; CWRU mechanical faults exceed 1,000+
     effective_threshold = max(lstm_threshold, 5.0)
     if mse_loss <= effective_threshold:
         lstm_score = 0.02 + 0.23 * min(1.0, max(0.0, mse_loss / effective_threshold))
     else:
-        lstm_score = 0.75 + 0.24 * min(1.0, max(0.0, (mse_loss - effective_threshold) / 100.0))
+        lstm_score = 0.85 + 0.14 * min(1.0, max(0.0, (mse_loss - effective_threshold) / 50.0))
     lstm_score = float(np.clip(lstm_score, 0.0, 1.0))
 
     # 3. Dual-Tier Ensemble Fusion
-    # During initial warm-up (< 10 readings), rely on Isolation Forest to prevent false warm-up alarms
     if len(device_buffers[device_id]) < 10:
         final_score = round(iso_score, 3)
     else:
         final_score = round(max(iso_score, lstm_score), 3)
+
+    # Physical safety envelope override: severe vibration (>4.5 mm/s ISO limit) or high temp (>85°C)
+    max_vib = max(curr.vibration_x, curr.vibration_y, curr.vibration_z)
+    if max_vib > 4.5:
+        final_score = max(final_score, 0.92)
+    elif curr.temperature > 85.0:
+        final_score = max(final_score, 0.90)
 
     # 4. Severity & Root-Cause Classification
     if final_score >= 0.85:
