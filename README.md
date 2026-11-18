@@ -25,7 +25,7 @@ The system is organized into a formal **3-Stage Node Pipeline** representing an 
 * **Mechanism:**
   * **Initialization & Validation:** Configures baseline device identity (`MOTOR_INDUCTION_01`), calibration parameters, and physical ratings (1450 RPM nominal speed, 15A full-load current).
   * **Core Telemetry Sampling:** Continuous 2 Hz (500ms) multi-channel sampling of 4 physical parameters:
-    * Tri-axial vibration ($X, Y, Z$) derived from rotational angular frequency ($\omega = 2\pi f$) with natural Gaussian noise ($\mathcal{N}(0, \sigma^2)$).
+    * Tri-axial vibration (X, Y, Z) derived from rotational angular frequency (omega = 2*pi*f) with natural Gaussian noise N(0, sigma^2).
     * Stator winding temperature (°C).
     * Phase current consumption (A).
     * Shaft rotational velocity (RPM).
@@ -79,7 +79,7 @@ The system is organized into a formal **3-Stage Node Pipeline** representing an 
 
 | Fault Profile | Physical Sensor Channel | Signature Pattern | Industrial Meaning |
 |---|---|---|---|
-| **Bearing Scratch (`spike`)** | Vibration ($X, Z$) | Rapid instantaneous pulse > 5.5 mm/s | Roller element striking a raceway fissure |
+| **Bearing Scratch (`spike`)** | Vibration (X, Z) | Rapid instantaneous pulse > 5.5 mm/s | Roller element striking a raceway fissure |
 | **Winding Overheat (`drift`)** | Stator Temperature | Steady +0.5°C/step cumulative rise | Thermal runaway, cooling fan failure, dry friction |
 | **Mechanical Jam (`jam`)** | Current & RPM | Current > 25A, RPM collapses < 1000 | Rotor obstruction, seized impeller, heavy overload |
 | **Catastrophic (`critical`)** | All Channels | Vibration > 10 mm/s, Temp > 95°C, Current > 30A | Multi-point structural failure triggering Emergency Interlock |
