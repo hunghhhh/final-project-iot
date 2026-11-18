@@ -167,6 +167,24 @@ python inject_fault.py --type critical
 
 ---
 
+## Next To-Do List (Upcoming Milestones)
+
+- [ ] **1. Standalone AI Engine Deployment (`ai-engine/`):**
+  - Build Python 3.11 + FastAPI microservice listening on port 8000.
+  - Implement `/api/predict` endpoint receiving telemetry windows from Node.js Gateway.
+- [ ] **2. Offline Model Training & Serialization:**
+  - Write `ai-engine/training/train.py` to train **Isolation Forest** (on statistical features) and **LSTM Autoencoder** (on normal temporal sequences).
+  - Pre-train using benchmark normal telemetry and serialize into `models/isolation_forest.joblib` and `models/lstm_autoencoder.pt`.
+- [ ] **3. Gateway-to-AI Integration:**
+  - Connect Fastify backend to forward sliding windows of sensor readings to the AI Engine for live inference.
+  - Return dynamic Anomaly Score & Reconstruction Error to replace mock scores.
+- [ ] **4. Web Audit & Alert History Interface:**
+  - Build a historical log table on the React dashboard reading stored incident alerts from SQLite.
+- [ ] **5. Quantitative Evaluation Benchmark:**
+  - Generate Confusion Matrix, Precision, Recall, and F1-Score reports comparing Isolation Forest vs. LSTM Autoencoder for thesis documentation.
+
+---
+
 ## License
 
 MIT License — Academic Graduation Thesis
