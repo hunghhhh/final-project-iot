@@ -51,6 +51,17 @@ class SensorMetric(BaseModel):
     rpm: float = Field(..., description="Rotational speed in RPM")
 
 
+class FeatureExtractionItem(BaseModel):
+    name: str
+    sensor: str
+    unit: str
+    raw: float
+    mean: float
+    std: float
+    zScore: float
+    status: str  # NOMINAL | WARNING | CRITICAL
+
+
 class PredictRequest(BaseModel):
     deviceId: str = Field(default="motor-ind-001", description="Device identifier")
     timestamp: Optional[int] = None
@@ -66,6 +77,7 @@ class PredictResponse(BaseModel):
     faultType: Optional[str]
     rootCause: str
     latencyMs: float
+    features: List[FeatureExtractionItem] = []
     details: Dict[str, float]
 
 
@@ -275,6 +287,41 @@ def predict_anomaly(req: PredictRequest):
     else:
         root_cause = "All telemetry metrics within nominal operational bounds."
 
+    # 5. Extract Feature Vector with Z-Scores for Live UI Inspection
+    feature_meta = [
+        {"name": "Stator Winding Temperature", "sensor": "MCP9700 Thermal", "unit": "°C", "raw": curr.temperature},
+        {"name": "Tri-Axial Vibration (X-Axis)", "sensor": "ISM330 Accelerometer", "unit": "mm/s", "raw": curr.vibration_x},
+        {"name": "Tri-Axial Vibration (Y-Axis)", "sensor": "ISM330 Accelerometer", "unit": "mm/s", "raw": curr.vibration_y},
+        {"name": "Tri-Axial Vibration (Z-Axis)", "sensor": "ISM330 Accelerometer", "unit": "mm/s", "raw": curr.vibration_z},
+        {"name": "Motor Phase Current", "sensor": "Current CT Transducer", "unit": "A", "raw": curr.current},
+        {"name": "Shaft Rotational Speed", "sensor": "Rotary Encoder / Tach", "unit": "RPM", "raw": curr.rpm},
+    ]
+
+    feature_items: List[FeatureExtractionItem] = []
+    for idx, meta in enumerate(feature_meta):
+        z_val = float(curr_scaled[0][idx])
+        mean_val = float(scaler.mean_[idx])
+        std_val = float(scaler.scale_[idx])
+
+        abs_z = abs(z_val)
+        if abs_z > 3.5:
+            f_status = "CRITICAL"
+        elif abs_z > 2.0:
+            f_status = "WARNING"
+        else:
+            f_status = "NOMINAL"
+
+        feature_items.append(FeatureExtractionItem(
+            name=meta["name"],
+            sensor=meta["sensor"],
+            unit=meta["unit"],
+            raw=round(meta["raw"], 2 if meta["unit"] != "mm/s" else 3),
+            mean=round(mean_val, 2 if meta["unit"] != "mm/s" else 3),
+            std=round(std_val, 3),
+            zScore=round(z_val, 2),
+            status=f_status
+        ))
+
     latency_ms = round((time.perf_counter() - t0) * 1000, 2)
 
     return PredictResponse(
@@ -285,6 +332,7 @@ def predict_anomaly(req: PredictRequest):
         faultType=fault_type,
         rootCause=root_cause,
         latencyMs=latency_ms,
+        features=feature_items,
         details={
             "iso_raw_score": round(iso_raw, 4),
             "iso_anomaly_score": round(iso_score, 3),

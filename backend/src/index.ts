@@ -20,12 +20,24 @@ interface InjectedFault {
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 }
 
+interface FeatureExtractionItem {
+  name: string;
+  sensor: string;
+  unit: string;
+  raw: number;
+  mean: number;
+  std: number;
+  zScore: number;
+  status: "NOMINAL" | "WARNING" | "CRITICAL";
+}
+
 interface AIDiagnostics {
   isAnomaly: boolean;
   severity: "NORMAL" | "MEDIUM" | "HIGH" | "CRITICAL";
   faultType?: string | null;
   rootCause: string;
   latencyMs: number;
+  features?: FeatureExtractionItem[];
   details?: Record<string, number>;
 }
 
@@ -46,6 +58,7 @@ interface AIPredictResponse {
   faultType?: string | null;
   rootCause: string;
   latencyMs: number;
+  features?: FeatureExtractionItem[];
   details?: Record<string, number>;
 }
 
@@ -161,6 +174,7 @@ async function bootstrap() {
             faultType: aiResult.faultType,
             rootCause: aiResult.rootCause,
             latencyMs: aiResult.latencyMs,
+            features: aiResult.features,
             details: aiResult.details,
           };
 

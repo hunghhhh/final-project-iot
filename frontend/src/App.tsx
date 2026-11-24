@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { EmergencyPage } from './components/EmergencyPage';
+import { AIFeatureInspector } from './components/AIFeatureInspector';
 import {
   LineChart,
   Line,
@@ -392,6 +393,9 @@ export default function App() {
           </div>
         </div>
       </section>
+
+      {/* ─── AI Neural Pipeline & Feature Extraction Inspector ──────────── */}
+      <AIFeatureInspector packet={latestPacket} />
 
       {/* ─── Interactive CLI Cheat-sheet for Thesis Defense ───────────────── */}
       <section className="bg-white border border-slate-200 shadow-sm rounded-2xl p-5">
