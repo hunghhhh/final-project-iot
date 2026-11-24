@@ -1,7 +1,6 @@
 import Fastify from "fastify";
 import fastifyCors from "@fastify/cors";
 import { Server } from "socket.io";
-import { createServer } from "http";
 import { PrismaClient } from "@prisma/client";
 
 // ─── Interfaces ────────────────────────────────────────────────────────────
@@ -145,8 +144,7 @@ async function bootstrap() {
   });
 
   // ─── Socket.IO WebSocket Hub ────────────────────────────────────────────────
-  const httpServer = createServer(fastify.server);
-  const io = new Server(httpServer, {
+  const io = new Server(fastify.server, {
     cors: { origin: "*" },
     path: "/ws",
   });
@@ -242,12 +240,11 @@ async function bootstrap() {
   const PORT = Number(process.env.PORT) || 3001;
 
   await fastify.ready();
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n🚀 IoT Backend running on http://localhost:${PORT}`);
-    console.log(`📡 WebSocket hub ready on ws://localhost:${PORT}/ws`);
-    console.log(`🤖 AI Engine Connected: ${AI_ENGINE_URL}`);
-    console.log(`🗄️  Database: SQLite (prisma/dev.db)\n`);
-  });
+  await fastify.listen({ port: PORT, host: "0.0.0.0" });
+  console.log(`\n🚀 IoT Backend running on http://localhost:${PORT}`);
+  console.log(`📡 WebSocket hub ready on ws://localhost:${PORT}/ws`);
+  console.log(`🤖 AI Engine Connected: ${AI_ENGINE_URL}`);
+  console.log(`🗄️  Database: SQLite (prisma/dev.db)\n`);
 }
 
 bootstrap().catch((err) => {

@@ -340,7 +340,7 @@ export const AIFeatureInspector: React.FC<AIFeatureInspectorProps> = ({ packet }
                   alerts.map((alert) => (
                     <tr key={alert.id} className="hover:bg-slate-50">
                       <td className="py-2.5 px-4 text-slate-500 font-sans whitespace-nowrap">
-                        {new Date(Number(alert.createdAt)).toLocaleTimeString()}
+                        {new Date(alert.createdAt).toLocaleTimeString()}
                       </td>
                       <td className="py-2.5 px-4 font-sans">
                         <span
